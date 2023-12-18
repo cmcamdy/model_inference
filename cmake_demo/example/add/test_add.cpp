@@ -6,8 +6,6 @@ using namespace std;
 
 
 int main(){
-
-    add(1,2);
-
+    cout << "1+2=" << add(1,2) << endl;
 }
 
