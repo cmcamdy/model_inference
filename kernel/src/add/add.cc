@@ -1,4 +1,4 @@
-#include "cmake_demo/add/add.h"
+#include "kernel/add/add.h"
 
 
 // template <typename T>

@@ -1,6 +1,6 @@
 
 #include <iostream>
-#include "cmake_demo/add/add.h"
+#include "kernel/add/add.h"
 #include <gtest/gtest.h>
 using namespace std;
 
