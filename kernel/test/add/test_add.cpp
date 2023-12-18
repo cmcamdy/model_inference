@@ -1,6 +1,7 @@
 
 #include <iostream>
 #include "kernel/add/add.h"
+#include "kernel/customop.h"
 #include <gtest/gtest.h>
 using namespace std;
 

@@ -20,6 +20,6 @@ namespace kernel
         CustomOpBase() = delete;
         CustomOpBase(const CustomOpBase &) = default;
         virtual ~CustomOpBase() = default;
-        virtual OP_Status Compute(contest::CustomOpContext* context) = 0;
+        virtual OP_Status Compute(context::CustomOpContext *context) = 0;
     };
-} // kernel
+} // namespace kernel
