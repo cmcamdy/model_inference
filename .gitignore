@@ -32,4 +32,4 @@
 *.app
 
 
-./cmake_demo/build*
+cmake_demo/build*
