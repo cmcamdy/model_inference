@@ -4,6 +4,8 @@ add_compile_options(-std=c++17)
 
 # includ cmake
 include(cmake/3rdparty.cmake)
+# include cuda cmake
+include(cmake/cuda.cmake)
 
 
 find_package(Threads REQUIRED)
