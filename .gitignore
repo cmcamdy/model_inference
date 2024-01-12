@@ -38,3 +38,4 @@ cuda/output/*
 
 test_data
 
+.vscode*
