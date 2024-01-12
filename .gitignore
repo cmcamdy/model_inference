@@ -34,3 +34,4 @@
 
 cmake_demo/build*
 kernel/build*
+cuda/output/*
