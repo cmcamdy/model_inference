@@ -185,6 +185,7 @@ namespace kernel
       template <typename DType>
       TensorPointer MakeTensor(const std::vector<int64_t> &shape,
                                const void *host_data = nullptr,
+                              //  DeviceType device = DeviceType::CPU_DEVICE)
                                DeviceType device = DeviceType::CUDA_DEVICE)
       {
         DataType data_type = DataTypeToEnum<DType>::value;

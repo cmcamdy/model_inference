@@ -133,12 +133,14 @@ namespace kernel
       uint64_t size = SizeOfDataType(data_type);
       for (const auto &x : shape)
       {
+        // std::cout << "shape:" << x << std::endl;
         size *= x;
       }
-
       void *data = nullptr;
       if (device == DeviceType::CUDA_DEVICE)
       {
+        // getenv检查环境变量，暂时没搞懂作用
+        // std::cout << "memory_check_mode_:" << memory_check_mode_ << std::endl;
         if (!memory_check_mode_)
         {
           data = cuda_allocator_.Allocate(size);
@@ -161,6 +163,7 @@ namespace kernel
       {
         if (device == DeviceType::CUDA_DEVICE)
         {
+          // std::cout << "host_data:" << host_data << std::endl;
           cudaMemcpyAsync(data, host_data, size, cudaMemcpyHostToDevice, stream_);
         }
         else if (device == DeviceType::CPU_DEVICE)
