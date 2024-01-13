@@ -53,7 +53,11 @@ OP_Status reduceSumOP<DType>::Compute(context::CustomOpContext *context) {
 
   bool compute_status = functor::ReduceSum1DOpExecute<DType>()(
       in_tensor_ptr, part_output_ptr, output_ptr, in_shapes[0][0], stream);
-  return OP_Status::OP_OK;
+  if (compute_status == true) {
+    return OP_Status::OP_OK;
+  } else {
+    return OP_Status::OP_RUNNING_ERR;
+  }
 }
 
 template class reduceSumOP<float>;
