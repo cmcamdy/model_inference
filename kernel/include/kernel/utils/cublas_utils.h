@@ -4,8 +4,8 @@
 #include <cublas_v2.h>
 
 #include <cstdint>
+#include "kernel/utils/error.h"
 
-#include "hpc_nn_ops/utils/error.h"
 #if CUDART_VERSION >= 10010
 #include <cublasLt.h>
 #endif  // CUDART_VERSION >= 10010
