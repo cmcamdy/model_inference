@@ -2,9 +2,10 @@
 #define UTILS_CUBLAS_UTILS_H_
 
 #include <cublas_v2.h>
-#include "hpc_nn_ops/utils/error.h"
 
 #include <cstdint>
+
+#include "hpc_nn_ops/utils/error.h"
 #if CUDART_VERSION >= 10010
 #include <cublasLt.h>
 #endif  // CUDART_VERSION >= 10010
@@ -49,9 +50,9 @@ inline cublasOperation_t CUBLASBooleanToTranspose(bool item) {
 }
 
 template <typename DType>
-void CublasGemm(bool trans_a, bool trans_b, uint64_t m, uint64_t n, uint64_t k, DType* matrix_A,
-                DType* matrix_B, DType* matrix_C, float alpha = 1.0, float beta = 0.,
-                cudaStream_t stream = 0);
+void CublasGemm(bool trans_a, bool trans_b, uint64_t m, uint64_t n, uint64_t k,
+                DType* matrix_A, DType* matrix_B, DType* matrix_C,
+                float alpha = 1.0, float beta = 0., cudaStream_t stream = 0);
 
 }  // namespace cublas
 }  // namespace utils

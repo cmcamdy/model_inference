@@ -9,26 +9,23 @@
  *
  */
 
-namespace kernel
-{
-    namespace vector_add_1d
-    {
+namespace kernel {
+namespace vector_add_1d {
 
-        namespace functor
-        {
+namespace functor {
 
-            namespace cuda_kernels
-            {
-                template <typename DType>
-                __global__ void vector_add_1d_kernel(const DType *a_tensor_ptr, const DType *b_tensor_ptr, DType *c_tensor_ptr, int length)
-                {
-                    int idx = blockDim.x * blockIdx.x + threadIdx.x;
-                    if(idx < length){
-                        c_tensor_ptr[idx] = a_tensor_ptr[idx] + b_tensor_ptr[idx];
-                    }
-                }
-            } // cuda_kernels
+namespace cuda_kernels {
+template <typename DType>
+__global__ void vector_add_1d_kernel(const DType *a_tensor_ptr,
+                                     const DType *b_tensor_ptr,
+                                     DType *c_tensor_ptr, int length) {
+  int idx = blockDim.x * blockIdx.x + threadIdx.x;
+  if (idx < length) {
+    c_tensor_ptr[idx] = a_tensor_ptr[idx] + b_tensor_ptr[idx];
+  }
+}
+}  // namespace cuda_kernels
 
-        } // functor
-    }     //  vector_add_1d
-} // kernel
+}  // namespace functor
+}  // namespace vector_add_1d
+}  // namespace kernel

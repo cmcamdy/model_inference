@@ -22,21 +22,20 @@ using std::vector;
 namespace conv_utils {
 
 template <typename DType>
-vector<DType> ComputeConvolutionOutputSpatialShape(const vector<DType>& input_spatial_shape,
-                                                   const vector<DType>& kernel_sizes,
-                                                   const vector<DType>& strides,
-                                                   const vector<DType>& paddings,
-                                                   const vector<DType>& dilations) {
+vector<DType> ComputeConvolutionOutputSpatialShape(
+    const vector<DType>& input_spatial_shape, const vector<DType>& kernel_sizes,
+    const vector<DType>& strides, const vector<DType>& paddings,
+    const vector<DType>& dilations) {
   // the output spatial shape
   vector<DType> output_spatial_shape;
 
   // compute the output spatial shapes.
   int rank = input_spatial_shape.size();
   for (int i = 0; i < rank; i++) {
-    DType out_shape =
-        (input_spatial_shape[i] + 2 * paddings[i] - (dilations[i] * (kernel_sizes[i] - 1) + 1)) /
-            strides[i] +
-        1;
+    DType out_shape = (input_spatial_shape[i] + 2 * paddings[i] -
+                       (dilations[i] * (kernel_sizes[i] - 1) + 1)) /
+                          strides[i] +
+                      1;
     output_spatial_shape.push_back(out_shape);
   }
 

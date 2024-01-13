@@ -10,16 +10,14 @@
 #pragma once
 #include <kernel/context/context.h>
 
-namespace kernel
-{
+namespace kernel {
 
-    /*! \brief Custom operator base class*/
-    class CustomOpBase
-    {
-    public:
-        CustomOpBase() = delete;
-        CustomOpBase(const CustomOpBase &) = default;
-        virtual ~CustomOpBase() = default;
-        virtual OP_Status Compute(context::CustomOpContext *context) = 0;
-    };
-} // namespace kernel
+/*! \brief Custom operator base class*/
+class CustomOpBase {
+ public:
+  CustomOpBase() = delete;
+  CustomOpBase(const CustomOpBase &) = default;
+  virtual ~CustomOpBase() = default;
+  virtual OP_Status Compute(context::CustomOpContext *context) = 0;
+};
+}  // namespace kernel
