@@ -1,3 +1,14 @@
+/**
+ * @file vector_add_1d.cc
+ * @author cmcandy
+ * @brief
+ * @version 0.1
+ * @date 2024-01-13
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
+
 #include "kernel/vector_add_1d/vector_add_1d.h"
 
 #include <cuda_runtime.h>
