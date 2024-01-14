@@ -2,6 +2,7 @@ add_library(kernel
     add/add.cc
     vector_add_1d/vector_add_1d.cc
     reduce_sum/reduce_sum.cc
+    reduce_2d_op/reduce_2d_op.cc
 )
 
 add_library(kernel_launch
