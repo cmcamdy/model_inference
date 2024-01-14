@@ -1,13 +1,14 @@
 /**
- * @file reduce_sum.cc
- * @author cmcandy
+ * ************************************************************
+ * @file          reduce_sum.cc
+ * @author        cmcandy
  * @brief
- * @version 0.1
- * @date 2024-01-13
- *
- * @copyright Copyright (c) 2024
- *
+ * @version       0.1
+ * @date          2024-01-14
+ * @copyright     Copyright (c) 2024
+ * ************************************************************
  */
+
 #include "kernel/reduce_sum/reduce_sum.h"
 
 #include <cuda_runtime.h>
@@ -22,8 +23,8 @@ namespace reduce_sum {
 using Tensor = context::ContextTensor;
 
 template <typename DType>
-reduceSumOP<DType>::reduceSumOP(int block_size_)
-    : CustomOpBase(*this), block_size_(block_size_) {}
+reduceSumOP<DType>::reduceSumOP(int length_)
+    : CustomOpBase(*this), length_(length_) {}
 
 template <typename DType>
 reduceSumOP<DType>::~reduceSumOP() {}
@@ -52,7 +53,7 @@ OP_Status reduceSumOP<DType>::Compute(context::CustomOpContext *context) {
   DType *output_ptr = static_cast<DType *>(output_tensor->raw_data);
 
   bool compute_status = functor::ReduceSum1DOpExecute<DType>()(
-      in_tensor_ptr, part_output_ptr, output_ptr, in_shapes[0][0], stream);
+      in_tensor_ptr, part_output_ptr, output_ptr, length_, stream);
   if (compute_status == true) {
     return OP_Status::OP_OK;
   } else {
