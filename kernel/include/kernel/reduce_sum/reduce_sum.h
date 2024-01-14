@@ -18,12 +18,12 @@ namespace reduce_sum {
 template <typename DType>
 class reduceSumOP : public CustomOpBase {
  public:
-  reduceSumOP(int block_size_);
+  reduceSumOP(int length_);
   virtual ~reduceSumOP();
   OP_Status Compute(context::CustomOpContext *context) override;
 
  protected:
-  int block_size_;
+  int length_;
 };
 
 }  // namespace reduce_sum
