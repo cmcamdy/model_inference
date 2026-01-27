@@ -1,0 +1,154 @@
+#include <cuda_runtime.h>
+
+#include "gemm.cuh"
+
+constexpr size_t BLOCK_SIZE =
+    16;  // we assume that every block has equal blockDim.x and blockDim.y
+constexpr size_t BLOCK_M =
+    128;  // These const values decide how many thing a thread compute and the
+          // amount of shared memory to allocate.
+constexpr size_t BLOCK_N = 128;
+constexpr size_t BLOCK_K =
+    8;  // don't set 64 here, it will cause bank conflict and lower occupancy.
+constexpr size_t BLOCK_M_COMPUTE = BLOCK_M / BLOCK_SIZE;
+constexpr size_t BLOCK_N_COMPUTE = BLOCK_N / BLOCK_SIZE;
+
+constexpr int shared_memory_A = BLOCK_M * BLOCK_K;
+constexpr int shared_memory_B = BLOCK_N * BLOCK_K;
+constexpr int shared_memory_element = shared_memory_A + shared_memory_B;
+constexpr int shared_memory_size =
+    shared_memory_element * sizeof(float);  // shared memory to use.
+#define colM(a, i, j, lda) a[((j) * (lda)) + (i)]
+#define rowM(a, i, j, lda) a[(j) + (i) * (lda)]
+
+const int REPEAT_TIME = 1;
+
+template <>
+__global__ void smem_gemm_warp_tiling_kernel(const float* A, const float* B,
+                                             float* C, const int M, const int N,
+                                             const int K) {
+    // baseX就是在X范围内N维度的起始下标，每个block计算M个（BLOCK_M_COMPUTE），拿到M维度的BLOCK下标(blockIdx.x * blockDim.x)
+    // baseY就是M维度的下标
+    const size_t baseX = blockIdx.x * blockDim.x * BLOCK_M_COMPUTE;
+    const size_t baseY = blockIdx.y * blockDim.y * BLOCK_N_COMPUTE;
+
+    const int moveNum = shared_memory_element / (BLOCK_SIZE * BLOCK_SIZE) / 2;
+    // 当前BLOCK内的tid: y * len(block_x) + x
+    const size_t baseIdx = threadIdx.y * blockDim.x + threadIdx.x;
+
+    constexpr size_t threadsNum = BLOCK_SIZE * BLOCK_SIZE;
+
+    // TM * TN
+    float c[BLOCK_M_COMPUTE * BLOCK_N_COMPUTE] = {};
+    float resC[BLOCK_M_COMPUTE * BLOCK_N_COMPUTE] = {};
+
+    // BLOCK_M * BLOCK_K + BLOCK_K * BLOCK_N
+    __shared__ float subA[BLOCK_M * BLOCK_K];
+    __shared__ float subB[BLOCK_K * BLOCK_N];
+
+    float4 regA[BLOCK_M_COMPUTE / 4];
+    float4 regB[BLOCK_M_COMPUTE / 4];
+
+    // 这里是把AB指针切到对应行、列
+    const float *baseA = A + baseY * K;
+    const float *baseB = B + baseX;
+
+    const auto ldb8 = N << 3;
+
+    /*
+    当前thread负责从global memory加载一部分高亮红、一部分高亮黄到SMEM，
+    因此所有thread一起加载了完整的高亮红(s_a，本代码中也称为subA), 高亮黄(s_b, 即subB)到SMEM
+    加载方式和上例中代码描述的一致，这里不再重复说明
+    
+    rowA: 该thread负责加载的第一个数在s_a中的row
+    colA: 该thread负责加载的第一个数在s_a中的col
+    rowB：该thread负责加载的第一个数在s_b中的row
+    colB: 该thread负责加载的第一个数在s_b中的col
+
+    subA = 128 * 8
+       (0123  ,  4567)
+    0  | 0        1   |
+    1  | 2        3   |
+    2  | 4        5   |
+    .......................
+    127|255       256 |
+
+    subB = 8 * 128
+    (0123,  4567, 891011, ..., 124-127)
+    0| 0      1      2    ...     31  |   
+    1| 32     33     34   ...     63  |
+    2| 64                 ...     95  |
+    3| 96                 ...     127 |
+    4| 128                ...     159 |
+    5| 160                ...     191 |
+    6| 192                ...     223 |
+    7| 224           ........     255 |
+
+
+    */
+    int rowA = baseIdx >> 1;
+    int colA = (baseIdx & 1) << 2;
+
+    int rowB = baseIdx >> 5;
+    int colB = (baseIdx << 2) & 127;
+
+    // warpId = baseIdx / 32, warpBaseId = baseIdx % 31;
+    int warpId = baseIdx >> 5, warpBaseId = baseIdx & 31;
+
+    // 0,8,16,24,32,40,48,56,64,72,80,88,96,104,112,120
+    int rowC = ((warpId >> 1 << 2) + (warpBaseId & 3)) << 3;
+    // (0/64 + 0-63) => 0-127
+    int colC = (((warpId & 1) << 3) + (warpBaseId >> 2)) << 3;
+    // 后续还要对baseC作操作，所以不到127可以理解
+    float *baseC = C + (baseY + rowC) * N + baseX + colC;
+
+    /*
+    对每个block，它都要经历K/Bk = 128/8 = 16次循环，每次循环计算一块s_a * s_b的结果
+    这也意味着，对每个block内的每个thread，它的外循环也是16次
+    */
+    for(int i=0; i<K; i+=BLOCK_K){
+
+      
+
+
+
+    }
+
+
+
+}
+
+torch::Tensor smem_gemm_blocktiling_2d_vector_avoid_bank_conflict(
+    torch::Tensor A, torch::Tensor B) {
+  const int block_size_x = TILE_SIZE_X;
+  const int block_size_y = TILE_SIZE_Y;
+  const int M = A.size(0);
+  const int K = A.size(1);
+  const int N = B.size(1);
+
+  auto C = torch::zeros({M, N}, torch::kCUDA);  // 确保在 CUDA 设备上分配内存
+  dim3 grid_dim((M + block_size_x - 1) / block_size_x,
+                (N + block_size_y - 1) / block_size_y);
+  // 按照x y z这个顺序排的
+  dim3 block_dim(block_size_x / TN, block_size_y / TM);
+
+  cudaEvent_t start, stop;
+  float milliseconds = 0;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cudaEventRecord(start);
+  for (int i = 0; i < REPEAT_TIME; ++i)
+    smem_gemm_blocktiling_2d_vector_avoid_bank_conflict_kernel<float>
+        <<<grid_dim, block_dim>>>(A.data_ptr<float>(), B.data_ptr<float>(),
+                                  C.data_ptr<float>(), M, N, K);
+  cudaEventRecord(stop);
+  cudaEventSynchronize(stop);
+  cudaEventElapsedTime(&milliseconds, start, stop);
+  std::cout << "smem_gemm_blocktiling_2d_vector_avoid_bank_conflict Kernel "
+               "execution time: "
+            << milliseconds / REPEAT_TIME << " ms" << std::endl;
+
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
+  return C;
+}
