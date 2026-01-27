@@ -9,6 +9,8 @@
 #include <torch/types.h>
 
 #include <ATen/cuda/CUDATensorMethods.cuh>
+#include <cuda_profiler_api.h>
+#include <nvtx3/nvToolsExt.h>
 
 template <typename T>
 __global__ void naive_gemm_kernel(const T* A, const T* B, T* C, const int M,
@@ -92,5 +94,5 @@ __global__ void smem_gemm_blocktiling_2d_vector_avoid_bank_conflict_warp_tiling_
 
 template <typename T>
 __global__ void
-smem_gemm_blocktiling_2d_vector_avoid_bank_conflict_double_buffer_kernel(
+smem_gemm_warp_tiling_kernel(
     const T* A, const T* B, T* C, const int M, const int N, const int K);

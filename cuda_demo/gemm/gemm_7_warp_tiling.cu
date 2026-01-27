@@ -2,126 +2,105 @@
 
 #include "gemm.cuh"
 
-const int TN = 4;
-const int TM = 4;
-const int TILE_SIZE = 32;
-const int TILE_SIZE_X = 64;
-const int TILE_SIZE_Y = 64;
+const int TILE_SIZE = 16;
+const int TILE_SIZE_M = 32;
+const int TILE_SIZE_N = 32;
+const int TILE_SIZE_K = 16;
+const int moveNumN = 5;
+const int moveNumK = 3;
+
+const int TM = TILE_SIZE_M / TILE_SIZE;
+const int TN = TILE_SIZE_N / TILE_SIZE;
+
 // 用于测速
-const int REPEAT_TIME = 1000;
+const int REPEAT_TIME = 1;
 
+// Define tile size
 template <>
-__global__ void smem_gemm_blocktiling_2d_vector_avoid_bank_conflict_warp_tiling_kernel(
-    const float* A, const float* B, float* C, const int M, const int N,
-    const int K) {
+__global__ void smem_gemm_warp_tiling_kernel(const float* A, const float* B, float* C,
+                                 const int M, const int N, const int K) {
   // Shared memory allocation
-  // threadIdx.x一个处理TM个数据
-  __shared__ float shared_A[TILE_SIZE_Y][TILE_SIZE_X];
-  // __shared__ float shared_B[TILE_SIZE_Y][TILE_SIZE_X + 1];
-  __shared__ float shared_B[TILE_SIZE_Y][TILE_SIZE_X];
+  __shared__ float shared_A[TILE_SIZE_M][TILE_SIZE_K];
+  __shared__ float shared_B[TILE_SIZE_K][TILE_SIZE_N];
 
-  int ldx = threadIdx.x;
-  // Calculate row and column index
-  int row = TILE_SIZE_Y * blockIdx.y + TM * threadIdx.y;
-  int col = TILE_SIZE_X * blockIdx.x + TN * threadIdx.x;
+  // block 内部的tid
+  int tid = threadIdx.y * blockDim.x + threadIdx.x;
+  // C row and column index
+  int row = blockIdx.y * TILE_SIZE_M + TM * threadIdx.y;
+  int col = blockIdx.x * TILE_SIZE_N + TN * threadIdx.x;
 
-  int t_row = threadIdx.y * TM;
-  int t_col = threadIdx.x * TN;
-  int shuffle_bias;
+  const float* A_base = A + blockIdx.y * TILE_SIZE_M * K;
+  const float* B_base = B + blockIdx.x * TILE_SIZE_N;
 
-  float value[TM * TN] = {0.0};
-  float tmp_a[TM] = {0.0};
-  float tmp_b[TN] = {0.0};
-
-  for (int t = 0; t < (K + TILE_SIZE_X - 1) / TILE_SIZE_X; ++t) {
-    // Load data into shared memory
-    if (row < M && t * TILE_SIZE_X + t_col < K) {
+  // float reg_A[TM][TILE_SIZE_K] = {};
+  // float reg_B[TILE_SIZE_K][TN] = {};
+  float value[TM][TN] = {0};
 #pragma unroll
-      for (int m = 0; m < TM; m++) {
-        for (int n = 0; n < TN; n += 4) {
-          reinterpret_cast<float4*>(&shared_A[t_row + m][t_col + n])[0] =
-              reinterpret_cast<float4*>(const_cast<float*>(
-                  &A[(row + m) * K + t * TILE_SIZE_X + t_col + n]))[0];
-        }
-      }
-    } else
-      shared_A[threadIdx.y][threadIdx.x] = 0.0f;
-
-    if (col < N && t * TILE_SIZE_Y + threadIdx.y < K) {
-      float4 tmp;
+  for (int t = 0; t < (K + TILE_SIZE_K - 1) / TILE_SIZE_K; ++t) {
+    // load data
+    // 对于A来说，一次blockDim.x * blockDim.y / TILE_SIZE_K行
+    // col = threadIdx.x % 8 >> (threadIdx.x & 7)
+    // row = (threadIdx.y * (blockDim.x / TILE_SIZE_K) + threadIdx.x / 8)
 #pragma unroll
-      for (int m = 0; m < TM; m++) {
-        for (int n = 0; n < TN; n += 4) {
-          //   reinterpret_cast<float4*>(&shared_B[t_row + m][t_col + n])[0] =
-          //       reinterpret_cast<float4*>(const_cast<float*>(
-          //           &B[(t * TILE_SIZE_Y + t_row + m) * N + col + n]))[0];
-          shuffle_bias = (ldx * 4 + n) % TN;
-          tmp = reinterpret_cast<float4*>(const_cast<float*>(
-              &B[(t * TILE_SIZE_Y + t_row + m) * N + col + n]))[0];
-          shared_B[t_row + m][t_col + shuffle_bias + 0] = tmp.x;
-          shared_B[t_row + m][t_col + shuffle_bias + 1] = tmp.y;
-          shared_B[t_row + m][t_col + shuffle_bias + 2] = tmp.z;
-          shared_B[t_row + m][t_col + shuffle_bias + 3] = tmp.w;
-        }
-      }
-    } else
-      shared_B[threadIdx.y][threadIdx.x] = 0.0f;
+    for (int step = tid; step < TILE_SIZE_M * TILE_SIZE_K;
+         step += blockDim.x * blockDim.y) {
+        int col = step % TILE_SIZE_K;
+        int row = step / TILE_SIZE_K;
+        shared_A[row][col] = A_base[t * TILE_SIZE_K + row * K + col];
+      // int col = step % TILE_SIZE_K / 4;
+      // int row = step / TILE_SIZE_K;
+      // int col = step & (TILE_SIZE_K-1);
+      // int row = step >> moveNumK;
+      // reinterpret_cast<float4*>(&shared_A[row][col*4])[0] =
+      //     reinterpret_cast<float4*>(
+      //         const_cast<float*>(&A_base[t * TILE_SIZE_K + row * K + col*4]))[0];
+    }
 
+    // 对于B来说，一次blockDim.x * blockDim.y / TILE_SIZE_N行
+    for (int step = tid; step < TILE_SIZE_K * TILE_SIZE_N;
+         step += blockDim.x * blockDim.y) {
+      int col = step % TILE_SIZE_N;
+      int row = step / TILE_SIZE_N;
+      // int col = step & (TILE_SIZE_N-1);
+      // int row = step >> moveNumN;
+      shared_B[row][col] = B_base[(t * TILE_SIZE_K) * N + row * N + col];
+    }
     __syncthreads();
-    // Perform computation
-    // 从目前的样子看起来，可以对B作向量化，但是对A，可能改动会大点1115
-    for (int i = 0; i < TILE_SIZE_X; i++) {
-#pragma unroll
-      for (int n = 0; n < TN; n += 4) {
-        shuffle_bias = (ldx * 4 + n) % TN;
-        tmp_b[n + 0] = shared_B[i][t_col + shuffle_bias + 0];
-        tmp_b[n + 1] = shared_B[i][t_col + shuffle_bias + 1];
-        tmp_b[n + 2] = shared_B[i][t_col + shuffle_bias + 2];
-        tmp_b[n + 3] = shared_B[i][t_col + shuffle_bias + 3];
-      }
-#pragma unroll
-      for (int m = 0; m < TM; m++) {
-        tmp_a[m] = shared_A[t_row + m][i];
-      }
 
+    // read to reg
+    // 64*64 / 16*16 => 一个thread要搞16个数
+    for (int k = 0; k < TILE_SIZE_K; k++) {
 #pragma unroll
-      for (int m = 0; m < TM; m++) {
+      for (int i = 0; i < TM; i++) {
 #pragma unroll
-        for (int n = 0; n < TN; n++) {
-          value[m * TN + n] += tmp_a[m] * tmp_b[n];
+        for (int j = 0; j < TN; j++) {
+          value[i][j] += shared_A[threadIdx.y * TM + i][k] *
+                         shared_B[k][threadIdx.x * TN + j];
         }
       }
     }
-    __syncthreads();
+    // __syncthreads();
   }
 
   // Write result
   if (row < M && col < N) {
-#pragma unroll
-    for (int m = 0; m < TM; m++) {
-#pragma unroll
-      for (int n = 0; n < TN; n += 4) {
-        reinterpret_cast<float4*>(&C[(row + m) * N + col + n])[0] =
-            reinterpret_cast<float4*>(&value[m * TN + n])[0];
+    for (int i = 0; i < TM; i++) {
+      for (int j = 0; j < TN; j++) {
+        C[(row + i) * N + col + j] = value[i][j];
       }
     }
   }
 }
 
-
-torch::Tensor smem_gemm_blocktiling_2d_vector_avoid_bank_conflict(
-    torch::Tensor A, torch::Tensor B) {
-  const int block_size_x = TILE_SIZE_X;
-  const int block_size_y = TILE_SIZE_Y;
+torch::Tensor smem_gemm_warptiling(torch::Tensor A, torch::Tensor B) {
   const int M = A.size(0);
   const int K = A.size(1);
   const int N = B.size(1);
 
   auto C = torch::zeros({M, N}, torch::kCUDA);  // 确保在 CUDA 设备上分配内存
-  dim3 grid_dim((M + block_size_x - 1) / block_size_x,
-                (N + block_size_y - 1) / block_size_y);
-  // 按照x y z这个顺序排的
-  dim3 block_dim(block_size_x / TN, block_size_y / TM);
+  dim3 grid_dim((M + TILE_SIZE - 1) / TILE_SIZE,
+                (N + TILE_SIZE - 1) / TILE_SIZE);
+  dim3 block_dim(TILE_SIZE, TILE_SIZE);
 
   cudaEvent_t start, stop;
   float milliseconds = 0;
@@ -129,15 +108,14 @@ torch::Tensor smem_gemm_blocktiling_2d_vector_avoid_bank_conflict(
   cudaEventCreate(&stop);
   cudaEventRecord(start);
   for (int i = 0; i < REPEAT_TIME; ++i)
-    smem_gemm_blocktiling_2d_vector_avoid_bank_conflict_kernel<float>
-        <<<grid_dim, block_dim>>>(A.data_ptr<float>(), B.data_ptr<float>(),
-                                  C.data_ptr<float>(), M, N, K);
+
+    smem_gemm_kernel<float><<<grid_dim, block_dim>>>(
+        A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), M, N, K);
   cudaEventRecord(stop);
   cudaEventSynchronize(stop);
   cudaEventElapsedTime(&milliseconds, start, stop);
-  std::cout << "smem_gemm_blocktiling_2d_vector_avoid_bank_conflict Kernel "
-               "execution time: "
-            << milliseconds / REPEAT_TIME << " ms" << std::endl;
+  std::cout << "smem_gemm Kernel execution time: " << milliseconds / REPEAT_TIME
+            << " ms" << std::endl;
 
   cudaEventDestroy(start);
   cudaEventDestroy(stop);

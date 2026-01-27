@@ -1,0 +1,2 @@
+/usr/local/NVIDIA-Nsight-Compute-2023.3/ncu --section={LaunchStats,InstructionStats,MemoryWorkloadAnalysis,MemoryWorkloadAnalysis_Tables,SourceCounters,SpeedOfLight,Occupancy} \
+        --target-processes all -f -o transpose2d python bench.py

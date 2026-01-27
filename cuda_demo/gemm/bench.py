@@ -3,7 +3,7 @@ import os
 import torch
 from torch.nn import functional as F
 from torch.utils.cpp_extension import load
-
+torch.cuda.nvtx.range_push("label")  # 无需额外链接，PyTorch已集成
 # https://zhenhuaw.me/blog/2019/gemm-optimization.html#%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E9%87%8F%E5%8C%96%E4%B8%AD%E7%9A%84%E7%9F%A9%E9%98%B5%E4%B9%98%E4%BC%98%E5%8C%96
 # A800 1024*1024
 # naive_gemm_kernel                                 8.40042 ms
@@ -24,7 +24,7 @@ from torch.utils.cpp_extension import load
 
 # 3060 1024*1024
 # naive_gemm Kernel execution time: 5.82274 ms
-# smem_gemm Kernel execution time: 2.24327 ms
+# smem_gemm Kernel execution time: 2.24327 msF
 # smem_gemm_blocktiling_1d Kernel execution time: 0.882974 ms
 # smem_gemm_blocktiling_2d Kernel execution time: 0.467195 ms
 # smem_gemm_blocktiling_2d_vector Kernel execution time: 0.422579 ms
@@ -39,16 +39,21 @@ from torch.utils.cpp_extension import load
 # smem_gemm_blocktiling_2d_vector_avoid_bank_conflict Kernel execution time: 3.02069 ms
 
 # Load the CUDA kernel as a python module
-# os.environ['TORCH_CUDA_ARCH_LIST'] = '8.6'  # 根据你的 GPU 架构调整
+os.environ['TORCH_CUDA_ARCH_LIST'] = '8.6'  # 根据你的 GPU 架构调整
+os.environ["CUDA_HOME"] = "/usr/local/cuda"  # 根据你的CUDA安装路径修改
+# sources = ['main.cpp', 'gemm_2_smem.cu']
 sources = ['main.cpp', 'gemm_1_naive.cu', 'gemm_2_smem.cu', 'gemm_3_block_tiling_1d.cu', 'gemm_4_block_tiling_2d.cu', 'gemm_5_vector.cu', 'gemm_6_bank_conflict.cu']
-custom_gemm = load(name='custom_gemm', sources=sources, extra_cuda_cflags=['-O2'])
+custom_gemm = load(name='custom_gemm', sources=sources, extra_cuda_cflags=['-O2'], verbose=True )
 torch.set_printoptions(threshold=float('inf'))
 
 # Use small model params, otherwise slower than manual attention. See caveats in README.
 batch_size = 16
 
-seq_len = 8
-head_embd = 8
+seq_len = 4
+head_embd = 4
+
+# seq_len = 8
+# head_embd = 8
 
 # seq_len = 16
 # head_embd = 16
@@ -68,26 +73,26 @@ head_embd = 64
 # seq_len = 512
 # head_embd = 512
 
-seq_len = 1024
-head_embd = 1024
+# seq_len = 1024
+# head_embd = 1024
 
-seq_len = 2048
-head_embd = 2048
+# seq_len = 2048
+# head_embd = 2048
 
 q = torch.randn(seq_len, head_embd).cuda()
 k = torch.randn(seq_len, head_embd).cuda()
 v = torch.randn(seq_len, head_embd).cuda()
 
-q = torch.ones(seq_len, head_embd).cuda()
-k = torch.ones(seq_len, head_embd).cuda()
+# q = torch.ones(seq_len, head_embd).cuda()
+# k = torch.ones(seq_len, head_embd).cuda()
 
 q = torch.arange(seq_len * head_embd, dtype=torch.float32).reshape(seq_len, head_embd).cuda()
 k = torch.arange(seq_len * head_embd, dtype=torch.float32).reshape(seq_len, head_embd).cuda()
-v = torch.arange(seq_len * head_embd, dtype=torch.float32).reshape(seq_len, head_embd).cuda()
+# # v = torch.arange(seq_len * head_embd, dtype=torch.float32).reshape(seq_len, head_embd).cuda()
 
 # print(q,k)
 
-print('=== profiling manual attention ===')
+# print('=== profiling manual attention ===')
 
 # Our minimal flash attention aims to be faster than this by avoiding HBM read/writes of N^2 matrices.
 def gemm(A, B):
@@ -98,20 +103,23 @@ def gemm(A, B):
 # print(prof.key_averages().table(sort_by='cuda_time_total', row_limit=10))
 manual_result = gemm(q, k)
 
-print('=== profiling minimal flash attention === ')
+print('=== profiling minimal gemm === ')
 
-minimal_result = custom_gemm.naive_gemm(q, k)
+# minimal_result = custom_gemm.naive_gemm(q, k)
 minimal_result = custom_gemm.smem_gemm(q, k)
-minimal_result = custom_gemm.smem_gemm_blocktiling_1d(q, k)
-minimal_result = custom_gemm.smem_gemm_blocktiling_2d(q, k)
-minimal_result = custom_gemm.smem_gemm_blocktiling_2d_vector(q, k)
-minimal_result = custom_gemm.smem_gemm_blocktiling_2d_vector_avoid_bank_conflict(q, k)
+# minimal_result = custom_gemm.smem_gemm_blocktiling_1d(q, k)
+# minimal_result = custom_gemm.smem_gemm_blocktiling_2d(q, k)
+# minimal_result = custom_gemm.smem_gemm_blocktiling_2d_vector(q, k)
+# minimal_result = custom_gemm.smem_gemm_blocktiling_2d_vector_avoid_bank_conflict(q, k)
 
-# # print('attn values sanity check:', torch.allclose(minimal_result.float(), manual_result, atol=1e-02))
+print('attn values sanity check:', torch.allclose(minimal_result.float(), manual_result, atol=1e-02))
 # if (not torch.allclose(minimal_result.float(), manual_result, atol=1e-02)):
-#     print('attn values sanity check:', False)
-#     # print(minimal_result - manual_result)
-#     print(torch.sum(minimal_result))
+#     # print(q,k)
+#     # print('attn values sanity check:', False)
+#     # print(minimal_result)
+#     # print(manual_result)
+#     print(minimal_result - manual_result)
+#     # print(torch.sum(minimal_result))
 
 # print('attn values sanity check:', torch.allclose(minimal_result.float(), manual_result, rtol=1e-02, atol=1e-02))
 # print(minimal_result - manual_result)

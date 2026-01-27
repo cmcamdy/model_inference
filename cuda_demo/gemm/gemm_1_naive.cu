@@ -8,7 +8,23 @@ const int TILE_SIZE = 32;
 const int TILE_SIZE_X = 64;
 const int TILE_SIZE_Y = 64;
 // 用于测速
-const int REPEAT_TIME = 1000;
+const int REPEAT_TIME = 1;
+
+// template <>
+// __global__ void naive_gemm_kernel(const float* A, const float* B, float* C,
+//                                   const int M, const int N, const int K) {
+//   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+//   int idy = blockIdx.y * blockDim.y + threadIdx.y;
+
+//   if (idx < M && idy < N) {  // 确保索引在矩阵范围内
+//     float sum = 0.0;
+//     // 1024*1024 8ms
+//     for (int k = 0; k < K; k += 1) {
+//       sum += A[idx * K + k] * B[k * N + idy];
+//     }
+//     C[idx * N + idy] = sum;
+//   }
+// }
 
 template <>
 __global__ void naive_gemm_kernel(const float* A, const float* B, float* C,
@@ -18,34 +34,15 @@ __global__ void naive_gemm_kernel(const float* A, const float* B, float* C,
 
   if (idx < M && idy < N) {  // 确保索引在矩阵范围内
     float sum = 0.0;
-    // // 1024*1024 8ms
-    // 一个thread负责K个元素
-    // for(int k=0; k<K; k+=4){
-    //     // float4 tmp_a =
-    //     reinterpret_cast<float4*>(const_cast<float*>(A))[idx*K / 4 + k];
-    //     // printf("check A: %d vs %d\n", tmp_a.x, A[idx*K + k]);
-    //     // sum += tmp_a.x * B[(k+0)*N + idy];
-    //     // sum += tmp_a.y * B[(k+1)*N + idy];
-    //     // sum += tmp_a.z * B[(k+2)*N + idy];
-    //     // sum += tmp_a.w * B[(k+3)*N + idy];
-    //     sum += A[idx*K + k+0] * B[(k+0)*N + idy];
-    //     sum += A[idx*K + k+1] * B[(k+1)*N + idy];
-    //     sum += A[idx*K + k+2] * B[(k+2)*N + idy];
-    //     sum += A[idx*K + k+3] * B[(k+3)*N + idy];
-    // }
-
-    // 1024*1024 2.4ms
     // #pragma unroll
     for (int k = 0; k < K / 4; k++) {
       float4 tmp_a =
           reinterpret_cast<float4*>(const_cast<float*>(A))[idx * K / 4 + k];
-      // printf("check A: %d vs %d\n", tmp_a.x, A[idx*K + k]);
       sum += tmp_a.x * B[(k * 4 + 0) * N + idy];
       sum += tmp_a.y * B[(k * 4 + 1) * N + idy];
       sum += tmp_a.z * B[(k * 4 + 2) * N + idy];
       sum += tmp_a.w * B[(k * 4 + 3) * N + idy];
     }
-
     C[idx * N + idy] = sum;
   }
 }
@@ -64,14 +61,18 @@ torch::Tensor naive_gemm(torch::Tensor A, torch::Tensor B) {
 
   cudaEvent_t start, stop;
   float milliseconds = 0;
+  cudaProfilerStart();
+  nvtxRangePush("Naive_GEMM_Kernel");
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
   cudaEventRecord(start);
   for (int i = 0; i < REPEAT_TIME; ++i)
     naive_gemm_kernel<float><<<grid_dim, block_dim, sram_size>>>(
         A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), M, N, K);
-
   cudaEventRecord(stop);
+
+  nvtxRangePop();
+  cudaProfilerStop();
   cudaEventSynchronize(stop);
   cudaEventElapsedTime(&milliseconds, start, stop);
   std::cout << "naive_gemm Kernel execution time: "

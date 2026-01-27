@@ -5,10 +5,10 @@
 const int TN = 4;
 const int TM = 4;
 const int TILE_SIZE = 32;
-const int TILE_SIZE_X = 64;
+const int TILE_SIZE_X = 32;
 const int TILE_SIZE_Y = 64;
 // 用于测速
-const int REPEAT_TIME = 1000;
+const int REPEAT_TIME = 1;
 
 template <>
 __global__ void smem_gemm_blocktiling_2d_vector_kernel(const float* A,
